@@ -16,7 +16,7 @@ dataBase();
 app.use("/api", routes);
 
 app.all('/', (req, res) => {
-    return res.status(500).json({message: "API is up and running"})
+    return res.status(200).json({message: "API is up and running"})
 })
 
 app.listen(port, () => {
