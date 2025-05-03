@@ -1,7 +1,6 @@
 const userModel = require("../model/userModel");
-const { sendRegistrationSuccessEmail } = require("../service/mail");
+const { sendRegistrationSuccessEmail, sendApplicationStatusEmail } = require("../service/mail");
 const cloudinary = require('cloudinary').v2
-// const sendRegistrationSuccessEmail = require('../service/mail') 
 
 const handleError = async (res, err) => {
   return res
@@ -83,7 +82,6 @@ exports.createUser = async (req, res) => {
 
 exports.getAllUser = async (req, res) => {
   try {
-    // const findAllUsers = await userModel.find().populate('countryOfOrigin').populate('travellingTo')
     const findAllUsers = await userModel
       .find()
       .populate(["countryOfOrigin", "travellingTo"]);
@@ -111,90 +109,73 @@ exports.getAllStatus = async (req, res) => {
 };
 
 exports.updateStatus = async (req, res) => {
-    try {
-        const { userId } = req.params;
-        const { status, rejectionReason } = req.body;
+  try {
+    const { userId } = req.params;
+    const { status, rejectionReason } = req.body;
 
-        const updatedUser = await userModel.findByIdAndUpdate(
-            userId,
-            { status: status, rejectionReason: rejectionReason },
-            { new: true }
-        ).populate('countryOfOrigin').populate('travellingTo'); // Populate for email content
-
-        if (!updatedUser) {
-            return res.status(404).json({ message: "User not found" });
-        }
-
-        let subject = '';
-        let body = '';
-
-        if (status === 'approved') {
-            subject = 'Your UK Masterclass Application - Approved!';
-            body = `Congratulations, ${updatedUser.firstName} ${updatedUser.lastName}! Your application for the UK Masterclass has been approved. We will be in touch with the next steps soon.`;
-        } else if (status === 'rejected') {
-            subject = 'Your UK Masterclass Application - Rejected';
-            body = `Dear ${updatedUser.firstName} ${updatedUser.lastName}, we regret to inform you that your application for the UK Masterclass has been rejected due to the following reason(s): ${rejectionReason || 'No specific reason provided.'}`;
-        } else if (status === 'pending') {
-            subject = 'Your UK Masterclass Application - Status Update';
-            body = `Dear ${updatedUser.firstName} ${updatedUser.lastName}, the status of your UK Masterclass application is currently pending review. We will notify you of any updates.`;
-        }
-
-        if (subject && body) {
-            await sendMail(updatedUser.email, subject, body);
-        }
-
-        return res.status(200).json({ message: "User status updated successfully", data: updatedUser });
-    } catch (err) {
-        handleError(res, err);
+    // If rejecting, ensure a reason is provided
+    if (status === 'rejected' && !rejectionReason) {
+      return res.status(400).json({
+        message: "Rejection reason is required when rejecting an application."
+      });
     }
+
+    // Update user status and optional rejection reason
+    const updatedUser = await userModel.findByIdAndUpdate(
+      userId,
+      { status, rejectionReason },
+      { new: true }
+    ).populate('countryOfOrigin').populate('travellingTo');
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Send formatted HTML email with status and reason
+    await sendApplicationStatusEmail(updatedUser);
+
+    return res.status(200).json({
+      message: "User status updated successfully",
+      data: updatedUser
+    });
+
+  } catch (err) {
+    handleError(res, err);
+  }
 };
 
+exports.getStatusCounts = async (req, res) => {
+  try {
+    const counts = await userModel.aggregate([
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
 
-// exports.updateStatus = async (req, res) => {
-//     try {
-//         const { userId } = req.params;
-//         const { status, rejectionReason } = req.body;
+    // Convert to key-value format like { approved: 5, rejected: 2, pending: 3 }
+    const formattedCounts = {
+      approved: 0,
+      rejected: 0,
+      pending: 0
+    };
 
-//         const updateFields = { status: status };
-//         if (status === 'rejected' && rejectionReason) {
-//             updateFields.rejectionReason = rejectionReason;
-//         } else if (status !== 'rejected') {
-//             updateFields.rejectionReason = null; // Or '', depending on your preference
-//         }
+    counts.forEach(item => {
+      formattedCounts[item._id] = item.count;
+    });
 
-//         const updatedUser = await userModel.findByIdAndUpdate(
-//             userId,
-//             updateFields,
-//             { new: true }
-//         );
+    const total = counts.reduce((sum, item) => sum + item.count, 0);
 
-//         if (!updatedUser) {
-//             return res.status(404).json({ message: "User not found" });
-//         }
-
-//         return res.status(200).json({ message: "User status updated successfully", data: updatedUser });
-//     } catch (err) {
-//         handleError(res, err);
-//     }
-// };
-
-// exports.updateStatus = async (req, res) => {
-//     try {
-//         const { userId } = req.params; // Get the user's ID from the URL parameters
-//         const { status, rejectionReason } = req.body; // Get the new status and (optional) rejection reason from the request body
-
-//         const updatedUser = await userModel.findByIdAndUpdate(
-//             userId,
-//             { status: status, rejectionReason: rejectionReason }, // Update the status and rejectionReason
-//             { new: true } // Return the updated document
-//         );
-
-//         if (!updatedUser) {
-//             return res.status(404).json({ message: "User not found" });
-//         }
-
-//         return res.status(200).json({ message: "User status updated successfully", data: updatedUser });
-//     } catch (err) {
-//         handleError(res, err);
-//     }
-// };
+    return res.status(200).json({
+      message: "Status counts fetched successfully",
+      data: {
+        total,
+        ...formattedCounts
+      }
+    });
+  } catch (err) {
+    handleError(res, err);
+  }
+};

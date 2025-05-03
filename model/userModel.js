@@ -7,13 +7,9 @@ const userModel = new Schema({
   number: { type: String, required: true },
   countryOfOrigin: {
     type: String,
-    // type: Schema.Types.ObjectId,
-    // ref: 'Country',
   },
   travellingTo: {
     type: String,
-    // type: Schema.Types.ObjectId,
-    // ref: 'Country',
   },
   documents: {
     bscCertificate: { type: String },
@@ -31,6 +27,8 @@ const userModel = new Schema({
     default: "pending",
   },
   rejectionReason: { type: String },
-});
+},
+{timestamps: true}
+);
 
 module.exports = model("User", userModel);

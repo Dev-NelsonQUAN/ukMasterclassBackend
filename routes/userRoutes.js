@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const upload = require('../config/multerMiddleware');
-const { getAllUser, createUser, getAllStatus, updateStatus } = require('../controller/userContoller');
+const { getAllUser, createUser, getAllStatus, updateStatus, getStatusCounts } = require('../controller/userContoller');
 
 router.post('/users/register', upload.fields([
     { name: 'bscCertificate', maxCount: 1 },
@@ -17,5 +17,6 @@ router.post('/users/register', upload.fields([
 router.get('/users/getAllUser', getAllUser);
 router.get('/users/status/:status', getAllStatus)
 router.patch("/users/:userId/status", updateStatus)
+router.get('/status-counts', getStatusCounts);
 
 module.exports = router;
