@@ -17,6 +17,6 @@ router.post('/users/register', upload.fields([
 router.get('/users/getAllUser', getAllUser);
 router.get('/users/status/:status', getAllStatus)
 router.patch("/users/:userId/status", updateStatus)
-router.get('/status-counts', getStatusCounts);
+router.get('users/status-counts', getStatusCounts);
 
 module.exports = router;
