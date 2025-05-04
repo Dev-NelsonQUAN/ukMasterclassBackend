@@ -18,5 +18,6 @@ router.get('/users/getAllUser', getAllUser);
 router.get('/users/status/:status', getAllStatus)
 router.patch("/users/:userId/status", updateStatus)
 router.get('users/status-counts', getStatusCounts);
+router.post("/admin/send-email", sendEmailToUser);
 
 module.exports = router;
