@@ -1,5 +1,5 @@
 const userModel = require("../model/userModel");
-const { sendRegistrationSuccessEmail, sendApplicationStatusEmail } = require("../service/mail");
+const { sendRegistrationSuccessEmail, sendApplicationStatusEmail, sendCustomAdminEmail } = require("../service/mail");
 const cloudinary = require('cloudinary').v2
 
 const handleError = async (res, err) => {
@@ -177,5 +177,26 @@ exports.getStatusCounts = async (req, res) => {
     });
   } catch (err) {
     handleError(res, err);
+  }
+};
+
+
+exports.sendEmailToUser = async (req, res) => {
+  const { email, subject, message } = req.body;
+
+  if (!email || !subject || !message) {
+    return res.status(400).json({ message: "All fields (email, subject, message) are required." });
+  }
+
+  try {
+    const success = await sendCustomAdminEmail({ email, subject, message });
+    if (success) {
+      return res.status(200).json({ message: "Email sent successfully." });
+    } else {
+      return res.status(500).json({ message: "Email sending failed." });
+    }
+  } catch (error) {
+    console.error("Error in sendEmailToUser:", error);
+    return res.status(500).json({ message: "Server error", error: error.message });
   }
 };
