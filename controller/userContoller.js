@@ -120,7 +120,6 @@ exports.updateStatus = async (req, res) => {
       });
     }
 
-    // Update user status and optional rejection reason
     const updatedUser = await userModel.findByIdAndUpdate(
       userId,
       { status, rejectionReason },
@@ -179,7 +178,6 @@ exports.getStatusCounts = async (req, res) => {
     handleError(res, err);
   }
 };
-
 
 exports.sendEmailToUser = async (req, res) => {
   const { email, subject, message } = req.body;
