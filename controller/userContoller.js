@@ -69,7 +69,7 @@ exports.createUser = async (req, res) => {
     if (create) {
         const subject = 'Registration Successful';
         const body = `Thank you for registering for the UK Masterclass application portal, ${firstName} ${lastName}. Your application is currently pending review. We will notify you of any updates.`;
-        await sendRegistrationSuccessEmail({ email: create.email, firstName: create.firstName, lastName: create.lastName }); // Pass an object containing the user details
+        await sendRegistrationSuccessEmail({ email: create.email, firstName: create.firstName, lastName: create.lastName }); 
     }
 
     return res
@@ -113,14 +113,12 @@ exports.updateStatus = async (req, res) => {
     const { userId } = req.params;
     const { status, rejectionReason } = req.body;
 
-    // If rejecting, ensure a reason is provided
     if (status === 'rejected' && !rejectionReason) {
       return res.status(400).json({
         message: "Rejection reason is required when rejecting an application."
       });
     }
 
-    // Update user status and optional rejection reason
     const updatedUser = await userModel.findByIdAndUpdate(
       userId,
       { status, rejectionReason },
@@ -131,7 +129,6 @@ exports.updateStatus = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Send formatted HTML email with status and reason
     await sendApplicationStatusEmail(updatedUser);
 
     return res.status(200).json({
@@ -179,7 +176,6 @@ exports.getStatusCounts = async (req, res) => {
     handleError(res, err);
   }
 };
-
 
 exports.sendEmailToUser = async (req, res) => {
   const { email, subject, message } = req.body;
