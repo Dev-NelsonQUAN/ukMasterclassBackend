@@ -12,12 +12,11 @@ const storage = new CloudinaryStorage({
     params: async (req, file) => {
         let folder = "ukMasterclassUploads";
         let publicId = `${file.fieldname}_${Date.now()}`;
-         // Use fieldname for public ID
 
         return {
             folder,
-            allowed_formats: ["jpg", "png", "jpeg", "pdf", "doc", "docx"], // Add other allowed formats
-            transformation: [{ width: 800, height: 800, crop: "limit" }], // Adjust transformation as needed
+            allowed_formats: ["jpg", "png", "jpeg", "pdf", "doc", "docx"],
+            transformation: [{ width: 800, height: 800, crop: "limit" }],
             public_id: publicId,
         };
     },
