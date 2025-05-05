@@ -1,6 +1,5 @@
 const nodemailer = require('nodemailer');
 
-// Setup transporter
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
@@ -11,7 +10,6 @@ const transporter = nodemailer.createTransport({
   logger: true,
 });
 
-// Core email sender
 const sendMail = async (email, subject, html) => {
   try {
     const mailOptions = {
@@ -30,7 +28,6 @@ const sendMail = async (email, subject, html) => {
   }
 };
 
-// Reusable HTML wrapper
 const wrapHtml = (title, content, color = '#333') => `
   <!DOCTYPE html>
   <html lang="en">
@@ -58,7 +55,6 @@ const wrapHtml = (title, content, color = '#333') => `
   </html>
 `;
 
-// Registration confirmation email
 exports.sendRegistrationSuccessEmail = async ({ email, firstName, lastName }) => {
   const subject = 'Registration Successful!';
   const content = `
@@ -72,7 +68,6 @@ exports.sendRegistrationSuccessEmail = async ({ email, firstName, lastName }) =>
   return sendMail(email, subject, html);
 };
 
-// Application status email
 exports.sendApplicationStatusEmail = async ({ email, status, rejectionReason, firstName, lastName }) => {
   let subject = '';
   let content = '';
