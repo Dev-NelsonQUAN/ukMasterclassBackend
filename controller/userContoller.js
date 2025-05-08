@@ -7,12 +7,14 @@ const {
 const cloudinary = require("cloudinary").v2;
 
 const handleError = (res, err) => {
-  return res
-    .status(500)
-    .json({ message: "An error occurred", error: err.message || err });
+  console.error("SERVER ERROR:", JSON.stringify(err, Object.getOwnPropertyNames(err), 2));
+  return res.status(500).json({
+    message: "An error occurred",
+    error: err?.message || err.toString(),
+    stack: err?.stack || null,
+  });
 };
 
-// Register new user and upload documents
 exports.createUser = async (req, res) => {
   try {
     const {
@@ -30,19 +32,28 @@ exports.createUser = async (req, res) => {
     }
 
     const documents = {};
+
     if (req.files) {
       const uploadTasks = Object.keys(req.files).map(async (fieldname) => {
         const file = req.files[fieldname][0];
 
+        console.log("Uploading file:", {
+          field: fieldname,
+          filePath: file.path,
+          fileMime: file.mimetype,
+        });
+
         try {
+          const fileType = file.mimetype?.split("/")[1] || "";
+          const isImage = ["jpg", "jpeg", "png"].includes(fileType);
+
           const result = await cloudinary.uploader.upload(file.path, {
             folder: `ukMasterclassUploads/${email}`,
             public_id: `${fieldname}_${Date.now()}`,
-            resource_type: "auto", // Automatically detects image, pdf, doc
-            transformation:
-              ["jpg", "png", "jpeg"].includes(file.mimetype.split("/")[1]) // Only transform images
-                ? [{ width: 800, height: 800, crop: "limit" }]
-                : [],
+            resource_type: "auto",
+            transformation: isImage
+              ? [{ width: 800, height: 800, crop: "limit" }]
+              : [],
           });
 
           documents[fieldname] = result.secure_url;
@@ -65,60 +76,59 @@ exports.createUser = async (req, res) => {
       documents,
     });
 
-    // Send registration email
     await sendRegistrationSuccessEmail({
       email: newUser.email,
       firstName: newUser.firstName,
       lastName: newUser.lastName,
     });
 
-    return res
-      .status(201)
-      .json({ message: "User created successfully", data: newUser });
+    return res.status(201).json({
+      message: "User created successfully",
+      data: newUser,
+    });
   } catch (err) {
     handleError(res, err);
   }
 };
 
-// Fetch all users
 exports.getAllUser = async (req, res) => {
   try {
     const users = await userModel
       .find()
       .populate(["countryOfOrigin", "travellingTo"]);
 
-    return res
-      .status(200)
-      .json({ message: "Users fetched successfully", data: users });
+    return res.status(200).json({
+      message: "Users fetched successfully",
+      data: users,
+    });
   } catch (err) {
     handleError(res, err);
   }
 };
 
-// Fetch users by status
 exports.getAllStatus = async (req, res) => {
   try {
     const { status } = req.params;
     const users = await userModel.find({ status });
 
-    return res
-      .status(200)
-      .json({ message: "Users by status fetched", data: users });
+    return res.status(200).json({
+      message: "Users by status fetched",
+      data: users,
+    });
   } catch (err) {
     handleError(res, err);
   }
 };
 
-// Update user status + rejection reason
 exports.updateStatus = async (req, res) => {
   try {
     const { userId } = req.params;
     const { status, rejectionReason } = req.body;
 
     if (status === "rejected" && !rejectionReason) {
-      return res
-        .status(400)
-        .json({ message: "Rejection reason is required for rejection" });
+      return res.status(400).json({
+        message: "Rejection reason is required when rejecting",
+      });
     }
 
     const updatedUser = await userModel
@@ -135,15 +145,15 @@ exports.updateStatus = async (req, res) => {
 
     await sendApplicationStatusEmail(updatedUser);
 
-    return res
-      .status(200)
-      .json({ message: "User status updated", data: updatedUser });
+    return res.status(200).json({
+      message: "User status updated",
+      data: updatedUser,
+    });
   } catch (err) {
     handleError(res, err);
   }
 };
 
-// Get user counts by status
 exports.getStatusCounts = async (req, res) => {
   try {
     const counts = await userModel.aggregate([
@@ -166,14 +176,13 @@ exports.getStatusCounts = async (req, res) => {
   }
 };
 
-// Admin-triggered custom email
 exports.sendEmailToUser = async (req, res) => {
   const { email, subject, message } = req.body;
 
   if (!email || !subject || !message) {
-    return res
-      .status(400)
-      .json({ message: "All fields (email, subject, message) required" });
+    return res.status(400).json({
+      message: "All fields (email, subject, message) required",
+    });
   }
 
   try {
@@ -188,7 +197,6 @@ exports.sendEmailToUser = async (req, res) => {
   }
 };
 
-// Delete single user
 exports.deleteUser = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -204,7 +212,6 @@ exports.deleteUser = async (req, res) => {
   }
 };
 
-// Delete all users
 exports.deleteAllUsers = async (req, res) => {
   try {
     await userModel.deleteMany();
