@@ -6,12 +6,13 @@ const {
 } = require("../service/mail");
 const cloudinary = require("cloudinary").v2;
 
-const handleError = async (res, err) => {
+const handleError = (res, err) => {
   return res
     .status(500)
     .json({ message: "An error occurred", error: err.message || err });
 };
 
+// Register new user and upload documents
 exports.createUser = async (req, res) => {
   try {
     const {
@@ -22,115 +23,111 @@ exports.createUser = async (req, res) => {
       countryOfOrigin,
       travellingTo,
     } = req.body;
-    const documents = {};
 
-    const checkIfUserExists = await userModel.findOne({ email });
-
-    if (checkIfUserExists) {
+    const existingUser = await userModel.findOne({ email });
+    if (existingUser) {
       return res.status(409).json({ message: "Email already exists" });
     }
 
-    // Handle multiple file uploads
+    const documents = {};
     if (req.files) {
-      const uploadPromises = Object.keys(req.files).map(async (fieldname) => {
-        const file = req.files[fieldname][0]; // Multer sends array of files for each field
+      const uploadTasks = Object.keys(req.files).map(async (fieldname) => {
+        const file = req.files[fieldname][0];
+
         try {
           const result = await cloudinary.uploader.upload(file.path, {
-            folder: `ukMasterclassUploads/${email}`, // Organize by user email
+            folder: `ukMasterclassUploads/${email}`,
             public_id: `${fieldname}_${Date.now()}`,
-            allowed_formats: ["jpg", "png", "jpeg", "pdf", "doc", "docx"],
-            transformation: [{ width: 800, height: 800, crop: "limit" }],
+            resource_type: "auto", // Automatically detects image, pdf, doc
+            transformation:
+              ["jpg", "png", "jpeg"].includes(file.mimetype.split("/")[1]) // Only transform images
+                ? [{ width: 800, height: 800, crop: "limit" }]
+                : [],
           });
+
           documents[fieldname] = result.secure_url;
-          return true;
         } catch (uploadErr) {
-          console.error(`Error uploading ${fieldname}:`, uploadErr);
-          return false; // Indicate upload failure
-        } finally {
-          // Optionally remove the temporary file from the server
-          // fs.unlinkSync(file.path);
+          console.error(`Upload failed for ${fieldname}:`, uploadErr);
+          throw new Error(`Upload failed for ${fieldname}`);
         }
       });
 
-      const uploadResults = await Promise.all(uploadPromises);
-      if (uploadResults.some((failed) => !failed)) {
-        return res
-          .status(500)
-          .json({ message: "Error uploading one or more documents" });
-      }
+      await Promise.all(uploadTasks);
     }
 
-    const create = await userModel.create({
+    const newUser = await userModel.create({
       firstName,
       lastName,
       email,
       number,
       countryOfOrigin,
       travellingTo,
-      documents: documents,
+      documents,
     });
 
-    if (create) {
-      const subject = "Registration Successful";
-      const body = `Thank you for registering for the UK Masterclass application portal, ${firstName} ${lastName}. Your application is currently pending review. We will notify you of any updates.`;
-      await sendRegistrationSuccessEmail({
-        email: create.email,
-        firstName: create.firstName,
-        lastName: create.lastName,
-      });
-    }
+    // Send registration email
+    await sendRegistrationSuccessEmail({
+      email: newUser.email,
+      firstName: newUser.firstName,
+      lastName: newUser.lastName,
+    });
 
     return res
       .status(201)
-      .json({ message: "User created successfully", data: create });
+      .json({ message: "User created successfully", data: newUser });
   } catch (err) {
     handleError(res, err);
   }
 };
 
+// Fetch all users
 exports.getAllUser = async (req, res) => {
   try {
-    const findAllUsers = await userModel
+    const users = await userModel
       .find()
       .populate(["countryOfOrigin", "travellingTo"]);
 
     return res
       .status(200)
-      .json({ message: "All user gotten successfully", data: findAllUsers });
+      .json({ message: "Users fetched successfully", data: users });
   } catch (err) {
     handleError(res, err);
   }
 };
 
+// Fetch users by status
 exports.getAllStatus = async (req, res) => {
   try {
     const { status } = req.params;
-
-    const getStatus = await userModel.find({ status });
+    const users = await userModel.find({ status });
 
     return res
       .status(200)
-      .json({ message: "Status gotten successfully", data: getStatus });
+      .json({ message: "Users by status fetched", data: users });
   } catch (err) {
     handleError(res, err);
   }
 };
 
+// Update user status + rejection reason
 exports.updateStatus = async (req, res) => {
   try {
     const { userId } = req.params;
     const { status, rejectionReason } = req.body;
 
     if (status === "rejected" && !rejectionReason) {
-      return res.status(400).json({
-        message: "Rejection reason is required when rejecting an application.",
-      });
+      return res
+        .status(400)
+        .json({ message: "Rejection reason is required for rejection" });
     }
 
     const updatedUser = await userModel
-      .findByIdAndUpdate(userId, { status, rejectionReason }, { new: true })
-      .populate("countryOfOrigin")
-      .populate("travellingTo");
+      .findByIdAndUpdate(
+        userId,
+        { status, rejectionReason },
+        { new: true }
+      )
+      .populate(["countryOfOrigin", "travellingTo"]);
 
     if (!updatedUser) {
       return res.status(404).json({ message: "User not found" });
@@ -138,83 +135,67 @@ exports.updateStatus = async (req, res) => {
 
     await sendApplicationStatusEmail(updatedUser);
 
-    return res.status(200).json({
-      message: "User status updated successfully",
-      data: updatedUser,
-    });
+    return res
+      .status(200)
+      .json({ message: "User status updated", data: updatedUser });
   } catch (err) {
     handleError(res, err);
   }
 };
 
+// Get user counts by status
 exports.getStatusCounts = async (req, res) => {
   try {
     const counts = await userModel.aggregate([
-      {
-        $group: {
-          _id: "$status",
-          count: { $sum: 1 },
-        },
-      },
+      { $group: { _id: "$status", count: { $sum: 1 } } },
     ]);
 
-    // Convert to key-value format like { approved: 5, rejected: 2, pending: 3 }
-    const formattedCounts = {
-      approved: 0,
-      rejected: 0,
-      pending: 0,
-    };
-
+    const defaultCounts = { approved: 0, rejected: 0, pending: 0 };
     counts.forEach((item) => {
-      formattedCounts[item._id] = item.count;
+      defaultCounts[item._id] = item.count;
     });
 
     const total = counts.reduce((sum, item) => sum + item.count, 0);
 
     return res.status(200).json({
-      message: "Status counts fetched successfully",
-      data: {
-        total,
-        ...formattedCounts,
-      },
+      message: "Status counts fetched",
+      data: { total, ...defaultCounts },
     });
   } catch (err) {
     handleError(res, err);
   }
 };
 
+// Admin-triggered custom email
 exports.sendEmailToUser = async (req, res) => {
   const { email, subject, message } = req.body;
 
   if (!email || !subject || !message) {
     return res
       .status(400)
-      .json({ message: "All fields (email, subject, message) are required." });
+      .json({ message: "All fields (email, subject, message) required" });
   }
 
   try {
-    const success = await sendCustomAdminEmail({ email, subject, message });
-    if (success) {
-      return res.status(200).json({ message: "Email sent successfully." });
+    const sent = await sendCustomAdminEmail({ email, subject, message });
+    if (sent) {
+      return res.status(200).json({ message: "Email sent successfully" });
     } else {
-      return res.status(500).json({ message: "Email sending failed." });
+      return res.status(500).json({ message: "Failed to send email" });
     }
-  } catch (error) {
-    console.error("Error in sendEmailToUser:", error);
-    return res
-      .status(500)
-      .json({ message: "Server error", error: error.message });
+  } catch (err) {
+    handleError(res, err);
   }
 };
 
+// Delete single user
 exports.deleteUser = async (req, res) => {
   try {
     const { userId } = req.params;
+    const deleted = await userModel.findByIdAndDelete(userId);
 
-    const deleteTheUser = await userModel.findByIdAndDelete(userId);
-
-    if (!deleteTheUser) {
-      return res.status(409).json({ message: "User not found" });
+    if (!deleted) {
+      return res.status(404).json({ message: "User not found" });
     }
 
     return res.status(200).json({ message: "User deleted successfully" });
@@ -223,11 +204,11 @@ exports.deleteUser = async (req, res) => {
   }
 };
 
+// Delete all users
 exports.deleteAllUsers = async (req, res) => {
   try {
-    const findAllUser = await userModel.deleteMany();
-
-    return res.status(200).json({ message: "All users deleted successfully" });
+    await userModel.deleteMany();
+    return res.status(200).json({ message: "All users deleted" });
   } catch (err) {
     handleError(res, err);
   }
