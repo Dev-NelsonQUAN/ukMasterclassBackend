@@ -211,7 +211,7 @@ exports.deleteUser = async (req, res) => {
   try {
     const { userId } = req.params;
 
-    const deleteTheUser = await userModel.findByIdAndDelete({ userId });
+    const deleteTheUser = await userModel.findByIdAndDelete(userId);
 
     if (!deleteTheUser) {
       return res.status(409).json({ message: "User not found" });
