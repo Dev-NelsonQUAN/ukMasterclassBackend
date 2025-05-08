@@ -32,39 +32,22 @@ exports.createUser = async (req, res) => {
     }
 
     const documents = {};
+    const fields = [
+      'bscCertificate',
+      'transcript',
+      'wassceCertificate',
+      'cv',
+      'personalStatement',
+      'passportBiodata',
+      'referenceLetter1',
+      'referenceLetter2'
+    ];
 
-    if (req.files) {
-      const uploadTasks = Object.keys(req.files).map(async (fieldname) => {
-        const file = req.files[fieldname][0];
-
-        console.log("Uploading file:", {
-          field: fieldname,
-          filePath: file.path,
-          fileMime: file.mimetype,
-        });
-
-        try {
-          const fileType = file.mimetype?.split("/")[1] || "";
-          const isImage = ["jpg", "jpeg", "png"].includes(fileType);
-
-          const result = await cloudinary.uploader.upload(file.path, {
-            folder: `ukMasterclassUploads/${email}`,
-            public_id: `${fieldname}_${Date.now()}`,
-            resource_type: "auto",
-            transformation: isImage
-              ? [{ width: 800, height: 800, crop: "limit" }]
-              : [],
-          });
-
-          documents[fieldname] = result.secure_url;
-        } catch (uploadErr) {
-          console.error(`Upload failed for ${fieldname}:`, uploadErr);
-          throw new Error(`Upload failed for ${fieldname}`);
-        }
-      });
-
-      await Promise.all(uploadTasks);
-    }
+    fields.forEach((field) => {
+      if (req.files[field] && req.files[field][0]) {
+        documents[field] = req.files[field][0].path; //  Already a Cloudinary URL
+      }
+    });
 
     const newUser = await userModel.create({
       firstName,
@@ -87,7 +70,8 @@ exports.createUser = async (req, res) => {
       data: newUser,
     });
   } catch (err) {
-    handleError(res, err);
+    console.error("ERROR:", err);
+    return res.status(500).json({ message: "Server error", error: err.message });
   }
 };
 
