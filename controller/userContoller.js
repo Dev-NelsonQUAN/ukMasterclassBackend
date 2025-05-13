@@ -14,19 +14,11 @@ const handleError = async (res, err) => {
 
 exports.createUser = async (req, res) => {
   try {
-    const { email, ...userData } = req.body;
+    const { email, documents, ...userData } = req.body;
 
-    // const {
-    //   firstName,
-    //   lastName,
-    //   email,
-    //   number,
-    //   travellingTo,
-    //   countryOfOrigin,
-    // } = req.body;
     const files = req.files;
     const cloudinaryFolder = "ukMasterclassUploads";
-    const documents = {};
+    // const documents = {};
 
     const existingUser = await userModel.findOne({ email });
 
@@ -76,10 +68,11 @@ exports.createUser = async (req, res) => {
     const newUser = new userModel({
       ...userData,
       email: email,
-      documents: documents,
+      documents: documents || {},
     });
 
     const savedUser = await newUser.save();
+
     res.status(201).json({
       message: "User created successfully",
       user: {
