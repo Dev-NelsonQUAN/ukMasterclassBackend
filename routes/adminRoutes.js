@@ -3,6 +3,6 @@ const { login } = require('../controller/adminAuth');
 const { adminAuth } = require('../middleware/AuthMiddleware');
 const adminRouter = express.Router();
 
-adminRouter.post("/login",adminAuth, login);
+adminRouter.post("/login", login);
 
 module.exports = adminRouter;
